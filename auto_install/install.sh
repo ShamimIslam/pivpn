@@ -21,7 +21,7 @@ PKG_CACHE="/var/lib/apt/lists/"
 UPDATE_PKG_CACHE="${PKG_MANAGER} update"
 PKG_INSTALL="${PKG_MANAGER} --yes --no-install-recommends install"
 PKG_COUNT="${PKG_MANAGER} -s -o Debug::NoLocking=true upgrade | grep -c ^Inst || true"
-PIVPN_DEPS=(openvpn git tar wget grep iptables-persistent dnsutils expect whiptail net-tools grepcidr jq)
+PIVPN_DEPS=(ipcalc openvpn git tar wget grep iptables-persistent dnsutils expect whiptail net-tools grepcidr jq)
 
 ###          ###
 
@@ -599,6 +599,52 @@ setCustomProto() {
     $SUDO cp /tmp/pivpnPROTO /etc/pivpn/INSTALL_PROTO
 }
 
+setCustomSubnet() {
+    IPCALC="/usr/bin/ipcalc"
+    if [[ ! -x "$IPCALC" ]] ; then
+	apt install -y ipcalc
+    fi
+    # Bail if ipcalc not found
+    if [[ ! -x "$IPCALC" ]]; then
+	    SUBNET="10.8.0.0/8"
+	    NETWORK="10.8.0.0"
+	    NETMASK="255.255.255.0"
+    else
+    until [[ $SUBNETCorrect = True ]]
+        do
+	    subnetInvalid="Invalid"
+
+	    DEFAULT_SUBNET="10.8.0.0/8"
+	    if SUBNET=$(whiptail --title "Default Pi-VPN Subnet" --inputbox "You can modify the default Pi-VPN subnet. \nEnter a new value or hit 'Enter' to retain the default. \nOnly private subnets are allowed.\nDO NOT MODIFY IF YOU DON'T UNDERSTAND WHAT THIS IS." ${r} ${c} $DEFAULT_SUBNET 3>&1 1>&2 2>&3)
+	    then
+		isPrivate=`ipcalc $SUBNET 2>/dev/null| grep "Private Internet" 2>/dev/null | wc -l 2>/dev/null`
+		if [ $isPrivate -eq 1 ] ; then
+		    SUBNET=`ipcalc $SUBNET | grep Network:| cut -f2 -d: | sed "s/^ *//g" | cut -f1 -d\ `
+		    NETWORK=`echo $SUBNET | cut -f1 -d/`
+		    NETMASK=`ipcalc $SUBNET | grep Netmask:| cut -f2 -d: | sed "s/^ *//g" | cut -f1 -d\ `
+	        else
+		    SUBNET=$subnetInvalid
+                fi
+            else
+                echo "::: Cancel selected, exiting...."
+                exit 1
+            fi
+            if [[ $SUBNET == "$subnetInvalid" ]]; then
+                whiptail --msgbox --backtitle "Invalid Subnet" --title "Invalid Subnet" "You entered an invalid Subnet.\n    Please enter a valid private Subnet.\n    If you are not sure, please just keep the default." ${r} ${c}
+                SUBNETCorrect=False
+            else
+                if (whiptail --backtitle "Specify Custom Subnet" --title "Confirm Custom Subnet" --yesno "Are these settings correct?\n    SUBNET:   $SUBNET\n    NETWORK:    $NETWORK\n    NETMASK:    $NETMASK" ${r} ${c}) then
+                    SUBNETCorrect=True
+                else
+                    # If the settings are wrong, the loop continues
+                    SUBNETCorrect=False
+                fi
+            fi
+        done
+     fi
+    echo ${PORT} > /tmp/INSTALL_SUBNET
+    $SUDO cp /tmp/INSTALL_SUBNET /etc/pivpn/INSTALL_SUBNET
+}
 
 setCustomPort() {
     until [[ $PORTNumCorrect = True ]]
@@ -662,6 +708,7 @@ setClientDNS() {
         OVPNDNS1=$(awk '{print $1}' <<< "${DNS_MAP["${DNSchoices}"]}")
         OVPNDNS2=$(awk '{print $2}' <<< "${DNS_MAP["${DNSchoices}"]}")
 
+        $SUDO sed -i 's/\(server \).*/\1'${SUBNET} ${NETMASK}'/' /etc/openvpn/server.conf
         $SUDO sed -i '0,/\(dhcp-option DNS \)/ s/\(dhcp-option DNS \).*/\1'${OVPNDNS1}'\"/' /etc/openvpn/server.conf
         $SUDO sed -i '0,/\(dhcp-option DNS \)/! s/\(dhcp-option DNS \).*/\1'${OVPNDNS2}'\"/' /etc/openvpn/server.conf
 
@@ -976,7 +1023,7 @@ confNetwork() {
         else
             echo "::: Detected UFW is enabled."
             echo "::: Adding UFW rules..."
-            $SUDO sed "/delete these required/i *nat\n:POSTROUTING ACCEPT [0:0]\n-I POSTROUTING -s 10.8.0.0/24 -o $IPv4dev -j MASQUERADE\nCOMMIT\n" -i /etc/ufw/before.rules
+            $SUDO sed "/delete these required/i *nat\n:POSTROUTING ACCEPT [0:0]\n-I POSTROUTING -s $SUBNET -o $IPv4dev -j MASQUERADE\nCOMMIT\n" -i /etc/ufw/before.rules
             # Insert rules at the beginning of the chain (in case there are other rules that may drop the traffic)
             $SUDO ufw insert 1 allow "$PORT"/"$PROTO" >/dev/null
 
@@ -986,7 +1033,7 @@ confNetwork() {
 
             if $SUDO dpkg --compare-versions "$INSTALLED_UFW" ge "$MINIMUM_UFW"; then
                 # Don't forward everything, just the traffic originated from the VPN subnet
-                $SUDO ufw route insert 1 allow in on tun0 from 10.8.0.0/24 out on "$IPv4dev" to any >/dev/null
+                $SUDO ufw route insert 1 allow in on tun0 from $SUBNET out on "$IPv4dev" to any >/dev/null
                 echo 0 > /tmp/OLD_UFW
             else
                 # This ufw version does not support route command, fallback to policy change
@@ -1007,7 +1054,7 @@ confNetwork() {
         # Now some checks to detect which rules we need to add. On a newly installed system all policies
         # should be ACCEPT, so the only required rule would be the MASQUERADE one.
 
-        $SUDO iptables -t nat -I POSTROUTING -s 10.8.0.0/24 -o "$IPv4dev" -j MASQUERADE
+        $SUDO iptables -t nat -I POSTROUTING -s $SUBNET -o "$IPv4dev" -j MASQUERADE
 
         # Count how many rules are in the INPUT and FORWARD chain. When parsing input from
         # iptables -S, '^-P' skips the policies and 'ufw-' skips ufw chains (in case ufw was found
@@ -1033,8 +1080,8 @@ confNetwork() {
         fi
 
         if [ "$FORWARD_RULES_COUNT" -ne 0 ] || [ "$FORWARD_POLICY" != "ACCEPT" ]; then
-            $SUDO iptables -I FORWARD 1 -d 10.8.0.0/24 -i "$IPv4dev" -o tun0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-            $SUDO iptables -I FORWARD 2 -s 10.8.0.0/24 -i tun0 -o "$IPv4dev" -j ACCEPT
+            $SUDO iptables -I FORWARD 1 -d $SUBNET -i "$IPv4dev" -o tun0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+            $SUDO iptables -I FORWARD 2 -s $SUBNET -i tun0 -o "$IPv4dev" -j ACCEPT
             FORWARD_CHAIN_EDITED=1
         else
             FORWARD_CHAIN_EDITED=0
@@ -1214,6 +1261,7 @@ installPiVPN() {
     $SUDO mkdir -p /etc/pivpn/
     confUnattendedUpgrades
     installScripts
+    setCustomSubnet
     setCustomProto
     setCustomPort
     confOpenVPN
@@ -1332,6 +1380,7 @@ checkhostname(){
 
 main() {
 
+    setCustomSubnet 
     ######## FIRST CHECK ########
     # Must be root to install
     echo ":::"
