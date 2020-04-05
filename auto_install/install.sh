@@ -599,6 +599,27 @@ setCustomProto() {
     $SUDO cp /tmp/pivpnPROTO /etc/pivpn/INSTALL_PROTO
 }
 
+setCustomRedirect() {
+  REDIRECT=false
+  REDIRECTCorrect=False
+  until [[ $REDIRECTCorrect = True ]]
+  	if (whiptail --backtitle "Specify Redirect" --title "Redirect all traffic" --yesno "Redirect all traffic through the VPN?" ${r} ${c}) then
+	    REDIRECT=true
+        else
+            REDIRECT=false
+        fi
+
+        if (whiptail --backtitle "Specify Redirect" --title "Confirm Redirect" --yesno "Are these settings correct?\n    Redirect All Traffic:   $REDIRECT\n" ${r} ${c}) then
+                    REDIRECTCorrect=True
+                else
+                    # If the settings are wrong, the loop continues
+                    REDIRECTCorrect=False
+                fi
+	fi
+    done
+    exit
+}
+
 setCustomSubnet() {
     IPCALC="/usr/bin/ipcalc"
     if [[ ! -x "$IPCALC" ]] ; then
@@ -946,6 +967,10 @@ EOF
     # Write config file for server using the template.txt file
     $SUDO cp /etc/.pivpn/server_config.txt /etc/openvpn/server.conf
 
+    # Remove redirect if not required
+    if [[ ${REDIRECT} == false ]] ; then
+    	$SUDO sed -i '/redirect-gateway def1/d' /etc/openvpn/server.conf
+    fi
     if [[ ${APPLY_TWO_POINT_FOUR} == true ]]; then
       #If they enabled 2.4 use tls-crypt instead of tls-auth to encrypt control channel
       $SUDO sed -i "s/tls-auth \/etc\/openvpn\/easy-rsa\/pki\/ta.key 0/tls-crypt \/etc\/openvpn\/easy-rsa\/pki\/ta.key/" /etc/openvpn/server.conf
@@ -1225,12 +1250,14 @@ finalExports() {
         echo "IPv4gw=${IPv4gw}"
         echo "pivpnProto=${pivpnProto}"
         echo "PORT=${PORT}"
+	echo "SUBNET=${SUBNET}"
         echo "ENCRYPT=${ENCRYPT}"
         echo "APPLY_TWO_POINT_FOUR=${APPLY_TWO_POINT_FOUR}"
         echo "DOWNLOAD_DH_PARAM=${DOWNLOAD_DH_PARAM}"
         echo "PUBLICDNS=${PUBLICDNS}"
         echo "OVPNDNS1=${OVPNDNS1}"
         echo "OVPNDNS2=${OVPNDNS2}"
+	echo "REDIRECT=${REDIRECT}"
     } | $SUDO tee "${setupVars}" > /dev/null
 }
 
@@ -1264,6 +1291,7 @@ installPiVPN() {
     setCustomSubnet
     setCustomProto
     setCustomPort
+    setCustomRedirect
     confOpenVPN
     confNetwork
     confOVPN
@@ -1279,7 +1307,10 @@ updatePiVPN() {
     confUnattendedUpgrades
     installScripts
 
-    # setCustomProto
+    setCustomSubnet
+    setCustomProto
+    setCustomPort
+    setCustomRedirect
     # write out the PROTO
     PROTO=$pivpnProto
     $SUDO cp /tmp/pivpnPROTO /etc/pivpn/INSTALL_PROTO
@@ -1380,7 +1411,6 @@ checkhostname(){
 
 main() {
 
-    setCustomSubnet 
     ######## FIRST CHECK ########
     # Must be root to install
     echo ":::"
@@ -1415,7 +1445,7 @@ main() {
         esac
     done
 
-    if [[ -f ${setupVars} ]]; then
+    if [[ -f ${setupVars} ]]; then 
         if [[ "${runUnattended}" == true ]]; then
             echo "::: --unattended passed to install script, no whiptail dialogs will be displayed"
             useUpdateVars=true
