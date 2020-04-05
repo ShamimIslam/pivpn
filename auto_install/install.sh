@@ -25,7 +25,7 @@ PIVPN_DEPS=(ipcalc openvpn git tar wget grep iptables-persistent dnsutils expect
 
 ###          ###
 
-pivpnGitUrl="https://github.com/pivpn/pivpn.git"
+pivpnGitUrl="https://github.com/ShamimIslam/pivpn.git"
 pivpnFilesDir="/etc/.pivpn"
 easyrsaVer="3.0.6"
 easyrsaRel="https://github.com/OpenVPN/easy-rsa/releases/download/v${easyrsaVer}/EasyRSA-unix-v${easyrsaVer}.tgz"
@@ -729,7 +729,7 @@ setClientDNS() {
         OVPNDNS1=$(awk '{print $1}' <<< "${DNS_MAP["${DNSchoices}"]}")
         OVPNDNS2=$(awk '{print $2}' <<< "${DNS_MAP["${DNSchoices}"]}")
 
-        $SUDO sed -i 's/\(server \).*/\1'${SUBNET} ${NETMASK}'/' /etc/openvpn/server.conf
+        $SUDO sed -i 's/\(server \).*/\1'${NETWORK} ${NETMASK}'/' /etc/openvpn/server.conf
         $SUDO sed -i '0,/\(dhcp-option DNS \)/ s/\(dhcp-option DNS \).*/\1'${OVPNDNS1}'\"/' /etc/openvpn/server.conf
         $SUDO sed -i '0,/\(dhcp-option DNS \)/! s/\(dhcp-option DNS \).*/\1'${OVPNDNS2}'\"/' /etc/openvpn/server.conf
 
@@ -820,6 +820,7 @@ setCustomDomain() {
 }
 
 confOpenVPN() {
+set -x
     # Grab the existing Hostname
         host_name=$(hostname -s)
         # Generate a random UUID for this server so that we can use verify-x509-name later that is unique for this server installation.
@@ -993,10 +994,14 @@ EOF
     if [ "$PROTO" != "udp" ]; then
         $SUDO sed -i "s/proto udp/proto tcp/g" /etc/openvpn/server.conf
     fi
+ 
+    # Update SUBNET
+    $SUDO sed -i "s/^server .*$/server $NETWORK $NETMASK/g" /etc/openvpn/server.conf
 
     # write out server certs to conf file
     $SUDO sed -i "s/\(key \/etc\/openvpn\/easy-rsa\/pki\/private\/\).*/\1${SERVER_NAME}.key/" /etc/openvpn/server.conf
     $SUDO sed -i "s/\(cert \/etc\/openvpn\/easy-rsa\/pki\/issued\/\).*/\1${SERVER_NAME}.crt/" /etc/openvpn/server.conf
+exit
 }
 
 confUnattendedUpgrades() {
