@@ -820,7 +820,6 @@ setCustomDomain() {
 }
 
 confOpenVPN() {
-set -x
     # Grab the existing Hostname
         host_name=$(hostname -s)
         # Generate a random UUID for this server so that we can use verify-x509-name later that is unique for this server installation.
@@ -1001,7 +1000,6 @@ EOF
     # write out server certs to conf file
     $SUDO sed -i "s/\(key \/etc\/openvpn\/easy-rsa\/pki\/private\/\).*/\1${SERVER_NAME}.key/" /etc/openvpn/server.conf
     $SUDO sed -i "s/\(cert \/etc\/openvpn\/easy-rsa\/pki\/issued\/\).*/\1${SERVER_NAME}.crt/" /etc/openvpn/server.conf
-exit
 }
 
 confUnattendedUpgrades() {
