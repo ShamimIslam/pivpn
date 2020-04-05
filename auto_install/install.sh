@@ -610,12 +610,11 @@ setCustomRedirect() {
         fi
 
         if (whiptail --backtitle "Specify Redirect" --title "Confirm Redirect" --yesno "Are these settings correct?\n    Redirect All Traffic:   $REDIRECT\n" ${r} ${c}) then
-                    REDIRECTCorrect=True
-                else
-                    # If the settings are wrong, the loop continues
-                    REDIRECTCorrect=False
-                fi
-	fi
+            REDIRECTCorrect=True
+        else
+            # If the settings are wrong, the loop continues
+            REDIRECTCorrect=False
+        fi
     done
     exit
 }
