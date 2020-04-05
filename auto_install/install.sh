@@ -599,23 +599,25 @@ setCustomProto() {
     $SUDO cp /tmp/pivpnPROTO /etc/pivpn/INSTALL_PROTO
 }
 
+# Control whether the redirect is included
 setCustomRedirect() {
-  REDIRECT=false
-  REDIRECTCorrect=False
-  until [[ $REDIRECTCorrect = True ]]
-  	if (whiptail --backtitle "Specify Redirect" --title "Redirect all traffic" --yesno "Redirect all traffic through the VPN?" ${r} ${c}) then
-	    REDIRECT=true
-        else
-            REDIRECT=false
-        fi
-
-        if (whiptail --backtitle "Specify Redirect" --title "Confirm Redirect" --yesno "Are these settings correct?\n    Redirect All Traffic:   $REDIRECT\n" ${r} ${c}) then
-            REDIRECTCorrect=True
-        else
-            # If the settings are wrong, the loop continues
-            REDIRECTCorrect=False
-        fi
-    done
+    REDIRECT=false
+    REDIRECTCorrect=False
+    until [[ $REDIRECTCorrect = True ]]
+        do
+  	    if (whiptail --backtitle "Specify Redirect" --title "Redirect all traffic" --yesno "Redirect all traffic through the VPN?" ${r} ${c}) then
+	        REDIRECT=true
+            else
+                REDIRECT=false
+            fi
+    
+            if (whiptail --backtitle "Specify Redirect" --title "Confirm Redirect" --yesno "Are these settings correct?\n    Redirect All Traffic:   $REDIRECT\n" ${r} ${c}) then
+                REDIRECTCorrect=True
+            else
+                # If the settings are wrong, the loop continues
+                REDIRECTCorrect=False
+            fi
+        done
     exit
 }
 
@@ -662,8 +664,8 @@ setCustomSubnet() {
             fi
         done
      fi
-    echo ${PORT} > /tmp/INSTALL_SUBNET
-    $SUDO cp /tmp/INSTALL_SUBNET /etc/pivpn/INSTALL_SUBNET
+     echo ${PORT} > /tmp/INSTALL_SUBNET
+     $SUDO cp /tmp/INSTALL_SUBNET /etc/pivpn/INSTALL_SUBNET
 }
 
 setCustomPort() {
