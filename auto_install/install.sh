@@ -21,7 +21,7 @@ PKG_CACHE="/var/lib/apt/lists/"
 UPDATE_PKG_CACHE="${PKG_MANAGER} update"
 PKG_INSTALL="${PKG_MANAGER} --yes --no-install-recommends install"
 PKG_COUNT="${PKG_MANAGER} -s -o Debug::NoLocking=true upgrade | grep -c ^Inst || true"
-PIVPN_DEPS=(ipcalc openvpn git tar wget grep iptables-persistent dnsutils expect whiptail net-tools grepcidr jq)
+PIVPN_DEPS=(ipcalc openvpn git tar wget grep iptables-persistent dnsutils expect whiptail net-tools grepcidr jq bash-completion)
 
 ###          ###
 
@@ -618,7 +618,6 @@ setCustomRedirect() {
                 REDIRECTCorrect=False
             fi
         done
-    exit
 }
 
 setCustomSubnet() {
